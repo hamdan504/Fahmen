@@ -4,15 +4,8 @@ import json
 import csv
 import time
 
-
-import sys
-import codecs
-
-# Set the default encoding to UTF-8
-sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
-
-
 mawdoo3_urls = {
+    "mawdoo3.com": {
         "count": 157,
         "classes": {
             "اﻷخﻼق الحميدةُ (Good Quotes)": [
@@ -177,63 +170,59 @@ mawdoo3_urls = {
                 "النميمةُ + https://mawdoo3.com/%D8%AD%D9%83%D9%85%D8%A9_%D8%B9%D9%86_%D8%A7%D9%84%D8%BA%D9%8A%D8%A8%D8%A9"
             ]
         }
-    
+    }   
 }
-def scrape_page(url, writer):
+
+def scrape_page(url):
     try:
         # Send GET request to the URL
         response = requests.get(url)
-        
+
         # Check if request was successful
         if response.status_code == 200:
             soup = BeautifulSoup(response.content, 'html.parser')
-            
+
             # Extracting the Arabic proverbs from specific divs
             proverbs_section = soup.find('div', {'id': 'mw-content-text'})
-            
+
             # Get all list items (li) inside this section
             if proverbs_section:
                 proverbs_list = proverbs_section.find_all('li')
-                for proverb in proverbs_list:
-                    # Write each proverb to the file
-                    # output_file.write(proverb.get_text() + '\n')
-
-                    writer.writerow({"classe":classe,"quote":proverb.get_text(),"methode of collection":"web scrapping","groupe":" Ahmed Adel","source URL":url})
-
+                filtered_proverbs = [
+                    proverb.get_text() for proverb in proverbs_list
+                    if not any(char in "١٢٣٤٥٦٧٨٩٠" for char in proverb.get_text())
+                    and "ذات صلة" not in proverb.get_text()
+                ]
+                return filtered_proverbs
             else:
                 print(f"Couldn't find the proverbs section in the page: {url}")
+                return []
         else:
             print(f"Error: Unable to retrieve the page. Status code {response.status_code}")
-    
+            return []
     except requests.exceptions.RequestException as e:
         print(f"Error scraping {url}: {str(e)}")
+        return []
 
-# # Open a file to save the proverbs
-# with open('arabic_proverbs.txt', 'w', encoding='utf-8') as output_file:
-#     # Loop over each category in the mawdoo3_urls dictionary
-#     for website, details in mawdoo3_urls.items():
-#         for class_name, urls in details["classes"].items():
-#             for url in urls:
-#                 # Extract the actual URL from the string
-#                 if '+' in url:  # To separate the proverb from the URL
-#                     proverb_text, proverb_url = url.split(' + ')
-#                     print(f"Scraping URL: {proverb_url.strip()}")
-#                     scrape_page(proverb_url.strip(), output_file)
-#                     output_file.write("\n" + "="*40 + "\n")  # Add a separator between different pages
+# Create a dictionary to store the scraped data
+data = {}
 
-#print("Scraping completed. Data saved to 'arabic_proverbs.txt'.")
+# Loop over each category in the mawdoo3_urls dictionary
+for category, details in mawdoo3_urls.items():
+    for class_name, urls in details["classes"].items():
+        for url in urls:
+            # Extract the actual URL from the string
+            if '+' in url:
+                proverb_text, proverb_url = url.split(' + ')
+                print(f"Scraping URL: {proverb_url.strip()}")
+                proverbs = scrape_page(proverb_url.strip())
+                if proverb_text not in data:
+                    data[proverb_text] = proverbs
+                else:
+                    data[proverb_text].extend(proverbs)
 
+# Save the data to a JSON file
+with open('../arabic_proverbs.json', 'w', encoding='utf-8') as output_file:
+    json.dump(data, output_file, ensure_ascii=False, indent=4)
 
-with open('DataSet.csv',mode="w",newline='',encoding="utf_8") as csv_file:
-    fieldnames=["quote","classe","methode of collection","groupe","source URL"]
-    writer=csv.DictWriter(csv_file,fieldnames=fieldnames)
-    writer.writeheader()
-    for superClass,classes in mawdoo3_urls["classes"].items():
-         for classNameAndUrl in classes:
-                
-                classe,url=classNameAndUrl.split(' + ')
-                scrape_page(url,writer)
-             
-
-     
-     
+print("Scraping completed. Data saved to 'arabic_proverbs.json'.")
